@@ -8,12 +8,14 @@ function App() {
   const [object, setObject] = useState(null);
   const [error, setError] = useState(null);
   const [similarObjects, setSimilarObjects] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
+  const port = process.env.PORT || 10000;
+  const url = "https://british-museum-branching.onrender.com";
 
   // Fetch an object based on search term from the backend
   const fetchObjectBySearch = async (query) => {
     try {
-      const response = await fetch(`http://localhost:3000/search-object?query=${searchTerm}`);
+      const response = await fetch(`${url}/search-object?query=${searchTerm}`);
       if (!response.ok) {
         throw new Error("Failed to fetch data");
       }
@@ -39,7 +41,7 @@ function App() {
 
     try {
       const response = await fetch(
-        `http://localhost:3000/similar-objects/${selectedObject.id}`
+        `${url}/similar-objects/${selectedObject.id}`
       );
       if (!response.ok) {
         throw new Error("Failed to fetch similar objects");
@@ -114,15 +116,22 @@ function App() {
         {similarObjects && similarObjects.length > 0 ? (
           <div>
             <h2>Similar Objects</h2>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center' }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "20px",
+                justifyContent: "center",
+              }}
+            >
               {similarObjects.map((simObj) => (
-                <div 
-                  key={simObj.id} 
-                  className="object-card" 
-                  style={{ 
-                    flex: '1 1 300px', 
-                    maxWidth: '400px',
-                    cursor: 'pointer'
+                <div
+                  key={simObj.id}
+                  className="object-card"
+                  style={{
+                    flex: "1 1 300px",
+                    maxWidth: "400px",
+                    cursor: "pointer",
                   }}
                   onClick={() => handleSimilarObjectClick(simObj)}
                 >
