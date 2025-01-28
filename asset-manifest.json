@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/british-museum-data-test.github.io/static/css/main.e6c13ad2.css",
-    "main.js": "/british-museum-data-test.github.io/static/js/main.ef0008ea.js",
+    "main.css": "/british-museum-data-test.github.io/static/css/main.220ea825.css",
+    "main.js": "/british-museum-data-test.github.io/static/js/main.60cbaaf8.js",
     "static/js/453.b9b4a01c.chunk.js": "/british-museum-data-test.github.io/static/js/453.b9b4a01c.chunk.js",
     "index.html": "/british-museum-data-test.github.io/index.html",
-    "main.e6c13ad2.css.map": "/british-museum-data-test.github.io/static/css/main.e6c13ad2.css.map",
-    "main.ef0008ea.js.map": "/british-museum-data-test.github.io/static/js/main.ef0008ea.js.map",
+    "main.220ea825.css.map": "/british-museum-data-test.github.io/static/css/main.220ea825.css.map",
+    "main.60cbaaf8.js.map": "/british-museum-data-test.github.io/static/js/main.60cbaaf8.js.map",
     "453.b9b4a01c.chunk.js.map": "/british-museum-data-test.github.io/static/js/453.b9b4a01c.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.e6c13ad2.css",
-    "static/js/main.ef0008ea.js"
+    "static/css/main.220ea825.css",
+    "static/js/main.60cbaaf8.js"
   ]
 }
