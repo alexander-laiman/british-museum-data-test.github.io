@@ -9,7 +9,7 @@ export class Node {
   ) {
     this.position = position;
     this.velocity = velocity;
-    this.extends = 20; // Default size for collision handling
+    this.extends = 30; // Default size for collision handling
     this.childNodes = [];
     this.parentNode = parent;
     this.userSelected = false;

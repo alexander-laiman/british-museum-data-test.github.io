@@ -4,14 +4,19 @@ import { updatePhysics } from "./physics.js";
 import "./treestyle.css";
 import * as d3 from "d3";
 
-export const TreeGraph = ({ searchHistory, similarRecords }) => {
+export const TreeGraph = ({
+  searchHistory,
+  similarRecords,
+  onNodeSelect,
+  activeNode,
+}) => {
   const containerRef = useRef(null); // Reference to the div container
   const svgRef = useRef(null); // Reference to the SVG
   const [containerSize, setContainerSize] = useState({
     width: 0,
     height: 0,
   }); // Default size
-
+  const [activeNodeS, setActiveNode] = useState(null); // Track selected node
   const [links, setLinks] = useState([]);
   const nodesRef = useRef([]);
   const maxNodes = 3;
@@ -193,6 +198,14 @@ export const TreeGraph = ({ searchHistory, similarRecords }) => {
     setLinks(initialLinks);
   }, []);
 
+  // Handle node clicks
+  const handleNodeClick = (_, node) => {
+    node.userSelected = false;
+
+    // Notify App.js that a new node was selected
+    onNodeSelect(node);
+  };
+
   useEffect(() => {
     const svg = d3
       .select(svgRef.current)
@@ -237,7 +250,15 @@ export const TreeGraph = ({ searchHistory, similarRecords }) => {
         0.12,
       ]; // Smooth oscillating force
       updatePhysics(nodesRef.current, links, windForceRef.current);
-
+      svg
+        .selectAll("line")
+        .data(links)
+        .join("line")
+        .attr("x1", (d) => d.source.position.x)
+        .attr("y1", (d) => d.source.position.y)
+        .attr("x2", (d) => d.target.position.x)
+        .attr("y2", (d) => d.target.position.y)
+        .attr("stroke", "white");
       svg
         .selectAll("g.node-group")
         .data(nodesRef.current)
@@ -254,44 +275,24 @@ export const TreeGraph = ({ searchHistory, similarRecords }) => {
             .attr("cx", (d) => d.position.x)
             .attr("cy", (d) => d.position.y)
             .attr("r", (d) => {
-              if (d.userSelected) {
-                d.extends = 40;
-                return 40;
-              }
               return d.extends;
             })
             .attr("fill", "white")
-            .on("click", (_, d) => {
-              if (!d.userSelected) {
-                d.userSelected = true;
-                if (d.depth < maxNodes) {
-                  addChildNodes(d);
-                }
-              }
-            });
+            .on("click", handleNodeClick);
 
           // Render the image inside the circle
           group
             .selectAll("image")
             .data([d])
             .join("image")
-            .attr("x", (d) => d.position.x - d.extends / 2)
-            .attr("y", (d) => d.position.y - d.extends / 2)
-            .attr("width", (d) => d.extends)
-            .attr("height", (d) => d.extends)
+            .attr("x", (d) => d.position.x - d.extends)
+            .attr("y", (d) => d.position.y - d.extends)
+            .attr("width", (d) => d.extends * 2)
+            .attr("height", (d) => d.extends * 2)
             .attr("xlink:href", (d) => d.image)
-            .attr("clip-path", "circle()");
+            .attr("clip-path", "circle()")
+            .on("click", handleNodeClick);
         });
-
-      svg
-        .selectAll("line")
-        .data(links)
-        .join("line")
-        .attr("x1", (d) => d.source.position.x)
-        .attr("y1", (d) => d.source.position.y)
-        .attr("x2", (d) => d.target.position.x)
-        .attr("y2", (d) => d.target.position.y)
-        .attr("stroke", "white");
 
       requestAnimationFrame(animate);
     };

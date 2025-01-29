@@ -9,6 +9,10 @@ import "./App.css"; // Optional: Custom styles
 import { TreeGraph } from "./TreeGraph";
 import { Node } from "./Node.js";
 import { updatePhysics } from "./physics.js";
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import UserHome from "./UserHome";
+import About from "./About";
+import { useNavigate } from "react-router-dom"; // Import navigation hook
 
 function App() {
   const [object, setObject] = useState(null);
@@ -23,6 +27,8 @@ function App() {
   const port = process.env.PORT || 10000;
   const url = "https://british-museum-branching.onrender.com";
   const [loggedIn, setLoggedIn] = useState(null);
+  const [activeNode, setActiveNode] = useState(null);
+  const navigate = useNavigate();
 
   //Text typing effect for header:
   useEffect(() => {
@@ -103,10 +109,31 @@ function App() {
   const handleSimilarObjectClick = (selectedObject) => {
     setHistory((prevHistory) => [...prevHistory, selectedObject]);
     setObject(selectedObject);
+    setActiveNode(selectedObject);
     // Clear similar objects before fetching new ones
     setSimilarObjects([]);
     // Fetch similar objects for the newly selected object
     setTimeout(() => fetchSimilarObjects(selectedObject), 0);
+  };
+
+  // Handle clicking on old node
+  const handleNodeSelect = (node) => {
+    // Check if the node already exists in history
+    const existingHistoryItem = searchHistory.find(
+      (item) => item.text_for_embedding === node.description
+    );
+
+    if (existingHistoryItem) {
+      // ✅ Restore previous state (same layout, previously fetched similar objects)
+      setObject(existingHistoryItem);
+      setSimilarObjects(similarRecords[existingHistoryItem.id] || []);
+      setActiveNode(node);
+    } else {
+      // ✅ New node: Fetch fresh data & update layout
+      fetchSimilarObjects(node.description);
+      setObject({ text_for_embedding: node.description, Image: node.image });
+      setActiveNode(node);
+    }
   };
 
   // Handle search form submission
@@ -123,19 +150,52 @@ function App() {
   const handleLogin = (res) => {
     console.log(res);
     setLoggedIn(true);
+    const userToken = res.credential;
+    postMessage("/api/login", { token: userToken }).then((user) => {
+      console.log(user);
+    });
   };
   const handleLogout = (res) => {
     console.log("Logging out");
     setLoggedIn(false);
+    postMessage("api/logout");
     googleLogout();
   };
+  // Clear states when navigating away
+  useEffect(() => {
+    return () => {
+      setObject(null);
+      setSimilarObjects([]);
+      setHistory([]);
+      setActiveNode(null);
+      setSearchTerm("");
+      setSimilarRecords({});
+    };
+  }, [navigate]);
+  useEffect(() => {
+    //getComputedStyle("/user_trees").then((treeObjs) => {
+    //pull up trees
+    //});
+  }, []);
 
   return (
     <div className="App">
       <nav className="navbar-container">
-        <span onClick={handleRefresh} className="clickable-link">
-          DataConnections &gt; |
+        <span className="clickable-link">
+          <Link to="/" style={{ textDecoration: "none", color: "inherit" }}>
+            DataConnections &gt; |
+          </Link>
+          <Link to="/about" className="clickable-link">
+            About &gt;
+          </Link>
         </span>
+
+        {/* Show "User Profile" link only when logged in */}
+        {loggedIn && (
+          <Link to="/user" className="clickable-link">
+            User Profile &gt;
+          </Link>
+        )}
         {loggedIn ? (
           <button onClick={handleLogout}> Log out</button>
         ) : (
@@ -148,88 +208,106 @@ function App() {
           />
         )}
       </nav>
-      <div className="main-app">
-        {error && <p className="error">{error}</p>}
-        {object ? (
-          <div className="history-tree-main">
-            <div className="tree-wrapper">
-              <TreeGraph
-                searchHistory={searchHistory}
-                similarRecords={similarRecords}
-              />
-            </div>
+      <Routes>
+        <Route path="/user" element={<UserHome />} />
+        <Route path="/about" element={<About />} />
 
-            <div className="object-card">
-              <div className="image-card">
-                <p>
-                  <strong>ID:</strong> {object.id}
-                </p>
-                <img src={object.Image} alt={object.text_for_embedding} />
-              </div>
-              <p>{object.text_for_embedding}</p>
-            </div>
-          </div>
-        ) : (
-          !error && (
-            <>
-              <header className="App-header">
-                <h1 className="animated-text">{typedText}</h1>
-              </header>
-              <div className="search-container">
-                <form onSubmit={handleSearchSubmit} className="search-form">
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="   Search..."
-                    className="search-box"
-                  />
-                  <button type="submit" className="search-button">
-                    {">"}
-                  </button>
-                </form>
-              </div>
-            </>
-          )
-        )}
-        {console.log("Current similarObjects state:", similarObjects)}
-        {similarObjects && similarObjects.length > 0 ? (
-          <div>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "20px",
-                justifyContent: "center",
-              }}
-            >
-              {similarObjects.map((simObj) => (
-                <div
-                  key={simObj.id}
-                  className="object-card-2"
-                  onClick={() => handleSimilarObjectClick(simObj)}
-                >
-                  <div className="image-card">
-                    <p>
-                      <strong>ID:</strong> {simObj.id}
-                    </p>
-                    <img src={simObj.Image} alt={simObj.text_for_embedding} />
+        <Route
+          path="/"
+          element={
+            <div className="main-app">
+              {error && <p className="error">{error}</p>}
+              {object ? (
+                <div className="history-tree-main">
+                  <div className="tree-wrapper">
+                    <TreeGraph
+                      searchHistory={searchHistory}
+                      similarRecords={similarRecords}
+                      onNodeSelect={handleNodeSelect}
+                      activeNode={activeNode}
+                    />
                   </div>
-                  <p>{simObj.text_for_embedding}</p>
+
+                  <div className="object-card">
+                    <div className="image-card">
+                      <p>
+                        <strong>ID:</strong> {object.id}
+                      </p>
+                      <img src={object.Image} alt={object.text_for_embedding} />
+                    </div>
+                    <p>{object.text_for_embedding}</p>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          object && (
-            <>
-              {console.log(
-                "No similar objects found or similarObjects is empty."
+              ) : (
+                !error && (
+                  <>
+                    <header className="App-header">
+                      <h1 className="animated-text">{typedText}</h1>
+                    </header>
+                    <div className="search-container">
+                      <form
+                        onSubmit={handleSearchSubmit}
+                        className="search-form"
+                      >
+                        <input
+                          type="text"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          placeholder="   Search..."
+                          className="search-box"
+                        />
+                        <button type="submit" className="search-button">
+                          {">"}
+                        </button>
+                      </form>
+                    </div>
+                  </>
+                )
               )}
-            </>
-          )
-        )}
-      </div>
+              {console.log("Current similarObjects state:", similarObjects)}
+              {similarObjects && similarObjects.length > 0 ? (
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "20px",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {similarObjects.map((simObj) => (
+                      <div
+                        key={simObj.id}
+                        className="object-card-2"
+                        onClick={() => handleSimilarObjectClick(simObj)}
+                      >
+                        <div className="image-card-2">
+                          <p>
+                            <strong>ID:</strong> {simObj.id}
+                          </p>
+                          <img
+                            src={simObj.Image}
+                            alt={simObj.text_for_embedding}
+                          />
+                          <p>{simObj.text_for_embedding}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                object && (
+                  <>
+                    {console.log(
+                      "No similar objects found or similarObjects is empty."
+                    )}
+                  </>
+                )
+              )}
+            </div>
+          }
+        />
+      </Routes>
     </div>
   );
 }

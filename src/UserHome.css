@@ -1,0 +1,85 @@
+/* Reset default margins and padding */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%; /* Ensure they take up the full viewport */
+  overflow-x: hidden; /* Prevent horizontal scrollbars */
+}
+
+/* Keyframes */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px); /* Slightly move up while fading in */
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0); /* End position */
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+    transform: translateY(0); /* End position */
+  }
+  to {
+    opacity: 0;
+    transform: translateY(20px); /* Slightly move up while fading in */
+  }
+}
+
+/* Main app container adjustments */
+.Main {
+  background-color: black;
+  color: black;
+  font-family: "Work Sans", sans-serif;
+  min-height: 100vh;
+  flex-grow: 1;
+}
+
+.user-home {
+  background-color: black;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  font-size: calc(10px + 2vmin);
+  color: white;
+  font-family: "Work Sans", sans-serif;
+  padding: 0px;
+}
+
+.user-header {
+  background-color: black;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(16px + 2vmin);
+  color: white;
+  font-family: "Work Sans", sans-serif;
+  padding-top: 30vh;
+}
+
+/* Navbar container */
+.navbar-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+}
+
+.clickable-link {
+  font-size: 3rem;
+  color: white;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}

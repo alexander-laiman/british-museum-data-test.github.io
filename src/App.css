@@ -22,6 +22,15 @@ body {
     transform: translateY(0); /* End position */
   }
 }
+/* Keyframes */
+@keyframes fade-in-col {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 
 @keyframes fade-out {
   from {
@@ -116,6 +125,7 @@ body {
   cursor: pointer;
   text-decoration: none;
   transition: color 0.3s ease;
+  animation: fade-in-col 1.5s;
 }
 
 /* Object card adjustments */
@@ -166,17 +176,65 @@ body {
 .image-card img {
   flex: 0 1 auto;
   height: auto;
-  border-radius: 4px;
+  border-radius: 8px;
+  object-fit: scale-down;
+  max-width: 100%;
+  padding: 4px;
+}
+.image-card-2 {
+  flex-direction: column;
   object-fit: contain;
-  margin: 16px;
-  max-width: 30vh;
-  max-height: 40vh;
+}
+.image-card-2 p {
+  flex: 0 1 auto;
+  margin: 10px 0;
+  font-size: 16px;
+}
+.image-card-2 img {
+  flex: 0 1 auto;
+  height: auto;
+  border-radius: 8px;
+  object-fit: scale-down;
+  max-width: 100%;
+  padding: 4px;
 }
 
 .object-card p {
   flex: 0 1 auto;
   margin: 10px 0;
   font-size: 16px;
+  max-width: 33%;
+  overflow-y: auto;
+}
+.object-card-2 p {
+  flex: 0 1 auto;
+  margin: 10px 0;
+  font-size: 16px;
+  max-width: 90%;
+  overflow-y: auto;
+}
+
+/* Scrollbar container */
+.object-card p::-webkit-scrollbar {
+  width: 8px; /* Width of the scrollbar */
+  height: 8px; /* Height of the horizontal scrollbar */
+}
+
+/* Scrollbar track */
+.object-card p::-webkit-scrollbar-track {
+  background: black; /* Background of the scrollbar track */
+  border-radius: 10px; /* Rounded corners */
+}
+
+/* Scrollbar handle */
+.object-card p::-webkit-scrollbar-thumb {
+  background: #212121; /* Scrollbar color */
+  border-radius: 10px; /* Rounded corners for the scrollbar handle */
+}
+
+/* Scrollbar handle on hover */
+.object-card p::-webkit-scrollbar-thumb:hover {
+  background: #3f3f3f; /* Darker scrollbar on hover */
 }
 
 /* Search container adjustments */
@@ -190,6 +248,7 @@ body {
 .search-form {
   display: flex; /* Aligns the input and button horizontally */
   align-items: center;
+  animation: fade-in-col 1.5s;
 }
 
 .search-box {
@@ -239,4 +298,5 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
+  animation: fade-in 1.5s;
 }

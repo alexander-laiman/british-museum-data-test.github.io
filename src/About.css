@@ -1,0 +1,34 @@
+/* Keyframes */
+@keyframes fade-in-col {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Page styling */
+.page-container {
+  text-align: center;
+  padding: 50px;
+  font-family: "Work Sans", sans-serif;
+}
+
+.page-header {
+  background-color: black;
+  color: white;
+  padding: 20px;
+  border-radius: 10px;
+  font-family: "Work Sans", sans-serif;
+  animation: fade-in-col 1.5s;
+}
+
+.page-content {
+  font-size: 18px;
+  margin-top: 20px;
+  font-family: "Work Sans", sans-serif;
+  background-color: black;
+  color: white;
+  animation: fade-in-col 1.5s;
+}

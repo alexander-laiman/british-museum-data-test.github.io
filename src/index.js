@@ -4,6 +4,7 @@ import "./index.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { BrowserRouter as Router } from "react-router-dom";
 
 const googleId =
   "425472324069-haehpn9ia2jkho45ha85dijudn12vboo.apps.googleusercontent.com";
@@ -12,7 +13,9 @@ const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
     <GoogleOAuthProvider clientId={googleId}>
-      <App />
+      <Router basename="/british-museum-data-test.github.io">
+        <App />
+      </Router>
     </GoogleOAuthProvider>
   </React.StrictMode>
 );
