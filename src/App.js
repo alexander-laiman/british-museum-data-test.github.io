@@ -14,7 +14,7 @@ function App() {
   const [object, setObject] = useState(null);
   const [error, setError] = useState(null);
   const [similarObjects, setSimilarObjects] = useState([]);
-  const [history, setHistory] = useState([]); // Stores the search history
+  const [searchHistory, setHistory] = useState([]); // Stores the search history
   const [similarRecords, setSimilarRecords] = useState({}); // Stores similar objects per search
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -56,6 +56,7 @@ function App() {
       const data = dataArray[0];
       setObject(dataArray);
       setHistory((prevHistory) => [...prevHistory, dataArray]);
+      console.log("Current history state:", searchHistory);
       setError(null);
       // Fetch similar objects for the newly selected object
       fetchSimilarObjects(dataArray);
@@ -80,7 +81,7 @@ function App() {
         throw new Error("Failed to fetch similar objects");
       }
       console.log("Setting similar objects.");
-
+      console.log("Current similarObjects state:", similarObjects);
       const data = await response.json();
       // Ensure data is always treated as an array
       const dataArray = Array.isArray(data) ? data : [data];
@@ -89,8 +90,9 @@ function App() {
       // Store the similar objects linked to the current search object
       setSimilarRecords((prevRecords) => ({
         ...prevRecords,
-        [selectedObject.id]: similarObjects, // Keep track of what was presented for this object
+        [selectedObject.id]: dataArray, // Keep track of what was presented for this object
       }));
+      console.log("Current similarRecords state:", similarRecords);
     } catch (err) {
       console.error(err);
       setError("Unable to load similar objects. Please try again later.");
@@ -151,7 +153,10 @@ function App() {
         {object ? (
           <div className="history-tree-main">
             <div className="tree-wrapper">
-              <TreeGraph />
+              <TreeGraph
+                searchHistory={searchHistory}
+                similarRecords={similarRecords}
+              />
             </div>
 
             <div className="object-card">

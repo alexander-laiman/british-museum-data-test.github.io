@@ -3,7 +3,8 @@ import { Node } from "./Node.js";
 import { updatePhysics } from "./physics.js";
 import "./treestyle.css";
 import * as d3 from "d3";
-export const TreeGraph = () => {
+
+export const TreeGraph = ({ searchHistory, similarRecords }) => {
   const containerRef = useRef(null); // Reference to the div container
   const svgRef = useRef(null); // Reference to the SVG
   const [containerSize, setContainerSize] = useState({
@@ -15,6 +16,139 @@ export const TreeGraph = () => {
   const nodesRef = useRef([]);
   const maxNodes = 3;
   const windForceRef = useRef(0);
+
+  const updateTreeFromHistory = (searchHistory, similarRecords) => {
+    if (!searchHistory.length) return;
+
+    // 1️⃣ Ensure Root Node Exists
+    let rootNode = nodesRef.current.find(
+      (node) => node.description === searchHistory[0].text_for_embedding
+    );
+    if (!rootNode) {
+      rootNode = new Node(
+        { x: containerSize.width / 2, y: containerSize.height - 50 },
+        { x: 0, y: 0 },
+        searchHistory[0].text_for_embedding,
+        searchHistory[0].Image,
+        null // Root has no parent
+      );
+      nodesRef.current.push(rootNode);
+    }
+
+    let parentNode = rootNode; // Start with root as the first parent
+
+    // 🟢 **(NEW) Attach Similar Objects for Root Node**
+    if (similarRecords[searchHistory[0].id]) {
+      similarRecords[searchHistory[0].id].forEach((similarObject, i) => {
+        // ✅ Prevent duplicate child nodes under the same parent
+        let existingChild = rootNode.childNodes.find(
+          (child) => child.description === similarObject.text_for_embedding
+        );
+        if (existingChild) return;
+
+        const childPosition = {
+          x:
+            rootNode.position.x +
+            (i - Math.floor(similarRecords[searchHistory[0].id].length / 2)) *
+              50,
+          y: rootNode.position.y - 50,
+        };
+
+        // ✅ Attach similarObject node immediately to root
+        const childNode = new Node(
+          childPosition,
+          { x: 0, y: 0 },
+          similarObject.text_for_embedding,
+          similarObject.Image,
+          rootNode
+        );
+        rootNode.childNodes.push(childNode);
+        nodesRef.current.push(childNode);
+
+        setLinks((prevLinks) => [
+          ...prevLinks,
+          { source: rootNode, target: childNode },
+        ]);
+      });
+    }
+
+    // 2️⃣ Process History: Attach Each Node to the Previous One
+    searchHistory.slice(1).forEach((object) => {
+      let existingNode = nodesRef.current.find(
+        (node) =>
+          node.description === object.text_for_embedding &&
+          node.parentNode === parentNode
+      );
+
+      if (!existingNode) {
+        // Determine position based on parent
+        const position = {
+          x: parentNode.position.x + 50,
+          y: parentNode.position.y - 50,
+        };
+
+        // Create new node and assign parent-child relationship
+        const newNode = new Node(
+          position,
+          { x: 0, y: 0 },
+          object.text_for_embedding,
+          object.Image,
+          parentNode
+        );
+        parentNode.childNodes.push(newNode); // Store in parent's childNodes
+        nodesRef.current.push(newNode);
+
+        setLinks((prevLinks) => [
+          ...prevLinks,
+          { source: parentNode, target: newNode },
+        ]);
+
+        parentNode = newNode; // ✅ Only update parentNode if a new node was created
+      } else {
+        parentNode = existingNode; // ✅ Move down the tree to the existing node
+      }
+
+      // 🟢 **Attach Similar Objects for This Node**
+      if (similarRecords[object.id]) {
+        similarRecords[object.id].forEach((similarObject, i) => {
+          // ✅ Ensure no duplicate child nodes under the same parent
+          let existingChild = parentNode.childNodes.find(
+            (child) => child.description === similarObject.text_for_embedding
+          );
+          if (existingChild) return;
+
+          const childPosition = {
+            x:
+              parentNode.position.x +
+              (i - Math.floor(similarRecords[object.id].length / 2)) * 50,
+            y: parentNode.position.y - 50,
+          };
+
+          // ✅ Attach similar object node immediately
+          const childNode = new Node(
+            childPosition,
+            { x: 0, y: 0 },
+            similarObject.text_for_embedding,
+            similarObject.Image,
+            parentNode
+          );
+          parentNode.childNodes.push(childNode); // Store child under the correct parent
+          nodesRef.current.push(childNode);
+
+          setLinks((prevLinks) => [
+            ...prevLinks,
+            { source: parentNode, target: childNode },
+          ]);
+        });
+      }
+    });
+  };
+
+  // Hook to ensure tree updates dynamically when history changes
+  useEffect(() => {
+    updateTreeFromHistory(searchHistory, similarRecords);
+  }, [searchHistory, similarRecords]);
+
   // Update container size dynamically
   useEffect(() => {
     const updateSize = () => {
@@ -57,7 +191,7 @@ export const TreeGraph = () => {
 
     nodesRef.current = initialNodes;
     setLinks(initialLinks);
-  }, [containerSize]);
+  }, []);
 
   useEffect(() => {
     const svg = d3
