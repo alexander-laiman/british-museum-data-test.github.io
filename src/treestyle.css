@@ -1,0 +1,10 @@
+.tree-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden; /* Prevents unwanted scrollbars */
+}
+
+svg {
+  display: block;
+}

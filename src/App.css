@@ -1,48 +1,124 @@
-.App {
-  text-align: center;
-  background-color: black;
-  color: white;
-  font-family: 'Work Sans', sans-serif;
+/* Reset default margins and padding */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+html,
+body {
+  height: 100%; /* Ensure they take up the full viewport */
+  overflow-x: hidden; /* Prevent horizontal scrollbars */
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
+/* Keyframes */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px); /* Slightly move up while fading in */
   }
+  to {
+    opacity: 1;
+    transform: translateY(0); /* End position */
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+    transform: translateY(0); /* End position */
+  }
+  to {
+    opacity: 0;
+    transform: translateY(20px); /* Slightly move up while fading in */
+  }
+}
+
+/* History container adjustments */
+.history-container {
+  background-color: #1a1a1a;
+  padding: 20px;
+  overflow-y: scroll;
+  border-right: 2px solid white; /* Separator line */
+}
+
+/* History container headings */
+.history-container h2 {
+  font-size: 1.5rem;
+  margin-bottom: 15px;
+}
+
+/* History items */
+.history-item {
+  background-color: #2a2a2a;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.history-item strong {
+  display: block;
+  font-size: 1.2rem;
+  color: #61dafb;
+}
+
+.history-item p {
+  font-size: 1rem;
+  color: #cccccc;
+}
+
+/* Main app container adjustments */
+.App {
+  background-color: black;
+  color: black;
+  font-family: "Work Sans", sans-serif;
+  min-height: 100vh;
+  flex-grow: 1;
+}
+
+.main-app {
+  background-color: black;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  font-size: calc(10px + 2vmin);
+  color: white;
+  font-family: "Work Sans", sans-serif;
+  padding: 0px;
 }
 
 .App-header {
   background-color: black;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  font-size: calc(10px + 2vmin);
+  align-items: center;
+  justify-content: center;
+  font-size: calc(16px + 2vmin);
   color: white;
-  font-family: 'Work Sans', sans-serif;
+  font-family: "Work Sans", sans-serif;
+  padding-top: 30vh;
+}
+
+/* Navbar container */
+.navbar-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
   padding: 20px;
-  margin-top: -50px; /* Add negative margin to move content up */
 }
 
-.App-link {
-  color: #61dafb;
+.clickable-link {
+  font-size: 3rem;
+  color: white;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.3s ease;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
+/* Object card adjustments */
 .object-card {
   background-color: #1a1a1a;
   border-radius: 8px;
@@ -51,16 +127,116 @@
   width: 100%;
   max-width: 600px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: row;
+  /* Fade-in animation */
+  opacity: 0; /* Start invisible */
+  animation: fade-in 1.5s ease-in forwards;
+  animation-delay: 0.2s;
+  object-fit: contain;
+}
+/* Object card adjustments */
+.object-card-2 {
+  background-color: #1a1a1a;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+  width: 100%;
+  max-width: 600px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  /* Fade-in animation */
+  opacity: 0; /* Start invisible */
+  animation: fade-in 1.5s ease-in forwards;
+  animation-delay: 0.2s;
+  cursor: "pointer";
+  object-fit: contain;
 }
 
-.object-card img {
-  max-width: 100%;
+.image-card {
+  flex-direction: column;
+  object-fit: contain;
+}
+.image-card p {
+  flex: 0 1 auto;
+  margin: 10px 0;
+  font-size: 16px;
+}
+.image-card img {
+  flex: 0 1 auto;
   height: auto;
   border-radius: 4px;
-  margin-bottom: 15px;
+  object-fit: contain;
+  margin: 16px;
+  max-width: 30vh;
+  max-height: 40vh;
 }
 
 .object-card p {
+  flex: 0 1 auto;
   margin: 10px 0;
   font-size: 16px;
+}
+
+/* Search container adjustments */
+.search-container {
+  display: flex; /* Aligns input and button side-by-side */
+  align-items: center; /* Vertically aligns the input and button */
+  justify-content: center; /* Centers the container horizontally */
+  margin-top: 20px;
+}
+
+.search-form {
+  display: flex; /* Aligns the input and button horizontally */
+  align-items: center;
+}
+
+.search-box {
+  font-size: 1.2rem;
+  border: 2px solid white;
+  border-right: none;
+  outline: none;
+  background: black;
+  color: white;
+  width: 400px;
+  border-radius: 4px 0 0 4px;
+  height: 50px;
+}
+
+.search-box::placeholder {
+  color: #aaaaaa;
+}
+
+.search-button {
+  background-color: white;
+  color: black;
+  font-size: 1.5rem;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 0 4px 4px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  transition: background-color 0.3s ease;
+  border: 2px solid white;
+}
+
+.search-button:hover {
+  background-color: #f0f0f0;
+}
+
+/* History tree layout */
+.history-tree-main {
+  display: flex;
+  flex-direction: row;
+  max-height: 45vh; /* Prevents vertical overflow */
+}
+
+.tree-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
