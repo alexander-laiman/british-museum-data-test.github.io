@@ -6,8 +6,12 @@ import reportWebVitals from "./reportWebVitals";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { BrowserRouter as Router } from "react-router-dom";
 
-const googleId =
-  "425472324069-haehpn9ia2jkho45ha85dijudn12vboo.apps.googleusercontent.com";
+const googleId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+
+if (!googleId) {
+  console.error('REACT_APP_GOOGLE_CLIENT_ID environment variable is required');
+  throw new Error('Google Client ID not configured');
+}
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(

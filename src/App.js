@@ -26,8 +26,13 @@ function App() {
   const [typedText, setTypedText] = useState("");
   const fullText = "Search with a feeling...";
   const port = process.env.PORT || 10000;
-    // Temporarily hardcode for testing
-    const url = "http://localhost:3000";
+    // Use environment variable for API URL
+    const url = process.env.REACT_APP_API_URL;
+    
+    if (!url) {
+      console.error('REACT_APP_API_URL environment variable is required');
+      throw new Error('API URL not configured');
+    }
   
   // Debug: Log the API URL being used
   console.log("API URL being used:", url);
