@@ -1,31 +1,317 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useImperativeHandle } from "react";
 import { Node } from "./Node.js";
 import { updatePhysics } from "./physics.js";
 import "./treestyle.css";
 import * as d3 from "d3";
 
-export const TreeGraph = ({
+// Tree configuration constants
+const TREE_CONFIG = {
+  // Zoom settings
+  MIN_ZOOM: 0.2,
+  MAX_ZOOM: 2.0,
+  DEFAULT_ZOOM: 1.0,
+  
+  // Tree layout
+  EDGE_LENGTH: 200,
+  CHILD_SPREAD: 50,
+  CHILD_OFFSET_Y: -50,
+  
+  // UI settings
+  PADDING: 100,
+  TRANSITION_DURATION: 750,
+  NODE_RADIUS: 30,
+  
+  // Physics
+  WIND_FORCE_MULTIPLIER: 0.00065,
+  WIND_FORCE_BASE: 0.12
+};
+
+// Input validation function
+const validateProps = ({ searchHistory, similarRecords, onNodeSelect, activeNode }) => {
+  const errors = [];
+  
+  if (!Array.isArray(searchHistory)) {
+    errors.push('searchHistory must be an array');
+  }
+  
+  if (typeof onNodeSelect !== 'function') {
+    errors.push('onNodeSelect must be a function');
+  }
+  
+  if (similarRecords && typeof similarRecords !== 'object') {
+    errors.push('similarRecords must be an object');
+  }
+  
+  return errors;
+};
+
+// Safe data access helper
+const safeGetSimilarRecords = (targetObject, similarRecords) => {
+  if (!targetObject?.id || !similarRecords) return null;
+  return similarRecords[targetObject.id] || null;
+};
+
+// Debug utility
+const createDebugLogger = (componentName) => {
+  const isDev = process.env.NODE_ENV === 'development';
+  
+  return {
+    log: (message, data) => {
+      if (isDev) {
+        console.log(`[${componentName}] ${message}`, data);
+      }
+    },
+    error: (message, error) => {
+      console.error(`[${componentName}] ${message}`, error);
+    },
+    warn: (message, data) => {
+      if (isDev) {
+        console.warn(`[${componentName}] ${message}`, data);
+      }
+    }
+  };
+};
+
+export const TreeGraph = React.forwardRef(({
   searchHistory,
   similarRecords,
   onNodeSelect,
   activeNode,
-}) => {
+  testRef,
+}, ref) => {
   const containerRef = useRef(null); // Reference to the div container
   const svgRef = useRef(null); // Reference to the SVG
   const [containerSize, setContainerSize] = useState({
     width: 0,
     height: 0,
   }); // Default size
-  const [activeNodeS, setActiveNode] = useState(null); // Track selected node
   const [links, setLinks] = useState([]);
   const nodesRef = useRef([]);
-  const maxNodes = 3;
   const windForceRef = useRef(0);
   const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 }); // Pan and zoom state
   const zoomRef = useRef(null); // Reference to the zoom behavior
+  const [maxDepth, setMaxDepth] = useState(0); // Track maximum tree depth
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const rootNodeRef = useRef(null); // Optimize root node lookup
+  const debug = createDebugLogger('TreeGraph');
 
-  const updateTreeFromHistory = (searchHistory, similarRecords) => {
+  // Error handler
+  const handleError = (error, errorInfo) => {
+    console.error('TreeGraph error:', error, errorInfo);
+    setHasError(true);
+    setErrorMessage(error.message || 'An error occurred');
+  };
+
+  // Function to calculate maximum depth of the tree
+  const calculateMaxDepth = (nodes) => {
+    if (!nodes || nodes.length === 0) return 0;
+    return Math.max(...nodes.map(node => node.depth));
+  };
+
+  // Function to calculate the maximum distance from root to any leaf node
+  const calculateMaxTreeHeight = (rootNode) => {
+    if (!rootNode) return 0;
+    
+    let maxHeight = 0;
+    
+    const traverse = (node, currentHeight) => {
+      if (node.childNodes.length === 0) {
+        // Leaf node - check if this is the deepest path
+        maxHeight = Math.max(maxHeight, currentHeight);
+      } else {
+        // Internal node - traverse children
+        node.childNodes.forEach(child => {
+          // Calculate distance from parent to child
+          const distance = Math.sqrt(
+            Math.pow(child.position.x - node.position.x, 2) + 
+            Math.pow(child.position.y - node.position.y, 2)
+          );
+          traverse(child, currentHeight + distance);
+        });
+      }
+    };
+    
+    traverse(rootNode, 0);
+    return maxHeight;
+  };
+
+  // Function to calculate the center position of multiple nodes
+  const calculateNodesCenter = (nodes) => {
+    if (!nodes || nodes.length === 0) return null;
+    
+    if (nodes.length === 1) {
+      return nodes[0].position;
+    }
+    
+    // For multiple nodes, we have two strategies:
+    // 1. If odd number of nodes: find the actual center node
+    // 2. If even number of nodes: average the positions of the two center nodes
+    
+    if (nodes.length % 2 === 1) {
+      // Odd number of nodes - find the center node
+      const centerIndex = Math.floor(nodes.length / 2);
+      const centerNode = nodes[centerIndex];
+      debug.log('Odd number of nodes, using center node at index:', centerIndex, centerNode?.description);
+      return centerNode.position;
+    } else {
+      // Even number of nodes - average the two center nodes
+      const centerIndex1 = nodes.length / 2 - 1;
+      const centerIndex2 = nodes.length / 2;
+      const centerNode1 = nodes[centerIndex1];
+      const centerNode2 = nodes[centerIndex2];
+      
+      const averageX = (centerNode1.position.x + centerNode2.position.x) / 2;
+      const averageY = (centerNode1.position.y + centerNode2.position.y) / 2;
+      
+      debug.log('Even number of nodes, averaging center nodes at indices:', centerIndex1, centerIndex2, {
+        node1: centerNode1?.description,
+        node2: centerNode2?.description,
+        averagePosition: { x: averageX, y: averageY }
+      });
+      
+      return {
+        x: averageX,
+        y: averageY
+      };
+    }
+  };
+
+  // Function to smoothly move view to a specific node or center of multiple nodes
+  const smoothMoveToNode = (targetNodeOrNodes, delay = 100) => {
+    // Handle both single node and array of nodes
+    const nodes = Array.isArray(targetNodeOrNodes) ? targetNodeOrNodes : [targetNodeOrNodes];
+    const centerPosition = calculateNodesCenter(nodes);
+    
+    debug.log('smoothMoveToNode called:', { 
+      nodeCount: nodes.length, 
+      centerPosition, 
+      delay,
+      nodeDescriptions: nodes.map(n => n?.description)
+    });
+    
+    if (!zoomRef.current || !svgRef.current || !centerPosition) {
+      debug.log('smoothMoveToNode: Missing refs or center position');
+      return;
+    }
+    
+    // Add delay before the transition
+    setTimeout(() => {
+      // Get SVG dimensions
+      const svgRect = svgRef.current.getBoundingClientRect();
+      const svgWidth = svgRect.width;
+      const svgHeight = svgRect.height;
+      
+      const svg = d3.select(svgRef.current);
+      const currentTransform = d3.zoomTransform(svg.node()) || d3.zoomIdentity;
+      
+      // Calculate target position to center the nodes in the view
+      const translateX = svgWidth / 2 - centerPosition.x * currentTransform.k;
+      const translateY = svgHeight / 2 - centerPosition.y * currentTransform.k;
+      
+      const targetTransform = d3.zoomIdentity
+        .translate(translateX, translateY)
+        .scale(currentTransform.k); // Keep current zoom level
+      
+      debug.log('smoothMoveToNode: Applying smooth transition', {
+        from: { x: currentTransform.x, y: currentTransform.y, k: currentTransform.k },
+        to: { x: translateX, y: translateY, k: currentTransform.k },
+        centerPosition,
+        nodeCount: nodes.length
+      });
+      
+      svg.transition()
+        .duration(TREE_CONFIG.TRANSITION_DURATION)
+        .call(zoomRef.current.transform, targetTransform)
+        .on("end", () => {
+          debug.log('smoothMoveToNode: Smooth transition completed');
+        });
+    }, delay);
+  };
+
+  // Function to auto-zoom based on tree structure (for initial setup only)
+  const autoZoomForDepth = (newMaxDepth) => {
+    debug.log('autoZoomForDepth called with depth:', { newMaxDepth, nodeCount: nodesRef.current.length });
+    
+    if (!zoomRef.current || !svgRef.current || !nodesRef.current.length) {
+      debug.log('autoZoomForDepth: Missing refs or no nodes');
+      return;
+    }
+    
+    const rootNode = rootNodeRef.current || nodesRef.current.find(node => node.parentNode === null);
+    if (!rootNode) {
+      debug.log('autoZoomForDepth: No root node found');
+      return;
+    }
+    
+    // Get SVG dimensions
+    const svgRect = svgRef.current.getBoundingClientRect();
+    const svgWidth = svgRect.width;
+    const svgHeight = svgRect.height;
+    
+    // Calculate zoom based on tree structure
+    let finalZoom;
+    
+    if (nodesRef.current.length === 1) {
+      // Single node case
+      finalZoom = TREE_CONFIG.DEFAULT_ZOOM;
+      debug.log('autoZoomForDepth: Single node case, zoom:', finalZoom);
+    } else {
+      // Multi-node case - calculate based on tree height
+      const estimatedTreeHeight = newMaxDepth * TREE_CONFIG.EDGE_LENGTH;
+      
+      // Calculate zoom to fit the estimated tree height with some padding
+      const zoomToFit = (svgHeight - TREE_CONFIG.PADDING * 2) / estimatedTreeHeight;
+      
+      // Use a reasonable zoom range
+      finalZoom = Math.max(TREE_CONFIG.MIN_ZOOM, Math.min(TREE_CONFIG.MAX_ZOOM, zoomToFit));
+      
+      debug.log('autoZoomForDepth: Multi-node case', {
+        estimatedTreeHeight,
+        zoomToFit,
+        finalZoom,
+        newMaxDepth
+      });
+    }
+    
+    // Center on the root node
+    const translateX = svgWidth / 2 - rootNode.position.x * finalZoom;
+    const translateY = svgHeight / 2 - rootNode.position.y * finalZoom;
+    
+    const svg = d3.select(svgRef.current);
+    const currentTransform = d3.zoomTransform(svg.node()) || d3.zoomIdentity;
+    
+    const targetTransform = d3.zoomIdentity
+      .translate(translateX, translateY)
+      .scale(finalZoom);
+    
+    debug.log('autoZoomForDepth: Applying zoom transition', {
+      from: { x: currentTransform.x, y: currentTransform.y, k: currentTransform.k },
+      to: { x: translateX, y: translateY, k: finalZoom },
+      rootPosition: rootNode.position
+    });
+    
+    svg.transition()
+      .duration(TREE_CONFIG.TRANSITION_DURATION)
+      .call(zoomRef.current.transform, targetTransform)
+      .on("end", () => {
+        debug.log('autoZoomForDepth: Zoom transition completed');
+        const finalTransform = d3.zoomTransform(svg.node());
+        debug.log('autoZoomForDepth: Final transform after transition', finalTransform);
+        
+        // Fallback: if the zoom didn't change, force it
+        if (Math.abs(finalTransform.k - finalZoom) > 0.01) {
+          debug.log('autoZoomForDepth: Zoom not applied correctly, forcing it');
+          svg.call(zoomRef.current.transform, targetTransform);
+        }
+      });
+  };
+
+  const updateTreeFromHistory = (searchHistory, similarRecords, activeNode) => {
     if (!searchHistory.length) return;
+
+    // Track newly created nodes for smooth transitions
+    const newlyCreatedNodes = [];
 
     // 1️⃣ Ensure Root Node Exists
     let rootNode = nodesRef.current.find(
@@ -38,136 +324,132 @@ export const TreeGraph = ({
         { x: 0, y: 0 },
         searchHistory[0].text_for_embedding,
         searchHistory[0].Image,
-        null // Root has no parent
+        null, // Root has no parent
+        searchHistory[0].id // Pass the database ID
       );
       nodesRef.current.push(rootNode);
-      
-      // Center the view on the root node when it's first created
-      if (svgRef.current && containerSize.width > 0 && zoomRef.current) {
-        const svg = d3.select(svgRef.current);
-        const centerTransform = d3.zoomIdentity
-          .translate(containerSize.width / 2, containerSize.height / 2)
-          .scale(1);
-        
-        svg.transition()
-          .duration(500)
-          .call(zoomRef.current.transform, centerTransform);
+      rootNodeRef.current = rootNode; // Store reference for optimization
+      newlyCreatedNodes.push(rootNode);
+    }
+
+    // Find the active node in our tree - this will be the parent for new children
+    let parentNode = rootNode; // Default to root
+    if (activeNode) {
+      const activeNodeInTree = nodesRef.current.find(
+        (node) => node.description === activeNode.description
+      );
+      if (activeNodeInTree) {
+        parentNode = activeNodeInTree;
       }
     }
 
-    let parentNode = rootNode; // Start with root as the first parent
-
-    // 🟢 **(NEW) Attach Similar Objects for Root Node**
-    if (similarRecords[searchHistory[0].id]) {
-      similarRecords[searchHistory[0].id].forEach((similarObject, i) => {
-        // ✅ Prevent duplicate child nodes under the same parent
-        let existingChild = rootNode.childNodes.find(
-          (child) => child.description === similarObject.text_for_embedding
+    // 🟢 **Attach Similar Objects to the Active Node**
+    // Find the object that corresponds to the active node to get its similar objects
+    let targetObject = null;
+    
+    // If we have an active node, find the corresponding object in search history
+    if (activeNode) {
+      targetObject = searchHistory.find(
+        (item) => item.text_for_embedding === activeNode.description
+      );
+    }
+    
+    // Fallback to the last object in search history if no active node match
+    if (!targetObject) {
+      targetObject = searchHistory[searchHistory.length - 1];
+    }
+    
+    const similarRecordsForTarget = safeGetSimilarRecords(targetObject, similarRecords);
+    if (similarRecordsForTarget) {
+      // Filter out similar objects that already exist anywhere in the tree
+      const filteredSimilarObjects = similarRecordsForTarget.filter((similarObject) => {
+        // Check if this object already exists anywhere in the tree
+        const existsInTree = nodesRef.current.some(
+          (node) => node.description === similarObject.text_for_embedding
         );
-        if (existingChild) return;
+        return !existsInTree;
+      });
+
+      filteredSimilarObjects.forEach((similarObject, i) => {
+        // ✅ Prevent adding the parent node as its own child
+        if (parentNode.description === similarObject.text_for_embedding) {
+          return;
+        }
+
 
         const childPosition = {
           x:
-            rootNode.position.x +
-            (i - Math.floor(similarRecords[searchHistory[0].id].length / 2)) *
-              50,
-          y: rootNode.position.y - 50,
+            parentNode.position.x +
+            (i - Math.floor(filteredSimilarObjects.length / 2)) * TREE_CONFIG.CHILD_SPREAD,
+          y: parentNode.position.y + TREE_CONFIG.CHILD_OFFSET_Y,
         };
 
-        // ✅ Attach similarObject node immediately to root
+        // ✅ Attach similarObject node to the active parent node
         const childNode = new Node(
           childPosition,
           { x: 0, y: 0 },
           similarObject.text_for_embedding,
           similarObject.Image,
-          rootNode
+          parentNode,
+          similarObject.id // Pass the database ID
         );
-        rootNode.childNodes.push(childNode);
+        parentNode.childNodes.push(childNode);
         nodesRef.current.push(childNode);
+        newlyCreatedNodes.push(childNode);
 
+        const newLink = { 
+          source: parentNode, 
+          target: childNode,
+          similarityScore: similarObject.similarityScore || 0
+        };
+        
+        
         setLinks((prevLinks) => [
           ...prevLinks,
-          { source: rootNode, target: childNode },
+          newLink
         ]);
       });
     }
 
-    // 2️⃣ Process History: Attach Each Node to the Previous One
-    searchHistory.slice(1).forEach((object) => {
-      let existingNode = nodesRef.current.find(
-        (node) =>
-          node.description === object.text_for_embedding &&
-          node.parentNode === parentNode
-      );
-
-      if (!existingNode) {
-        // Determine position based on parent
-        const position = {
-          x: parentNode.position.x + 50,
-          y: parentNode.position.y - 50,
-        };
-
-        // Create new node and assign parent-child relationship
-        const newNode = new Node(
-          position,
-          { x: 0, y: 0 },
-          object.text_for_embedding,
-          object.Image,
-          parentNode
-        );
-        parentNode.childNodes.push(newNode); // Store in parent's childNodes
-        nodesRef.current.push(newNode);
-
-        setLinks((prevLinks) => [
-          ...prevLinks,
-          { source: parentNode, target: newNode },
-        ]);
-
-        parentNode = newNode; // ✅ Only update parentNode if a new node was created
-      } else {
-        parentNode = existingNode; // ✅ Move down the tree to the existing node
-      }
-
-      // 🟢 **Attach Similar Objects for This Node**
-      if (similarRecords[object.id]) {
-        similarRecords[object.id].forEach((similarObject, i) => {
-          // ✅ Ensure no duplicate child nodes under the same parent
-          let existingChild = parentNode.childNodes.find(
-            (child) => child.description === similarObject.text_for_embedding
-          );
-          if (existingChild) return;
-
-          const childPosition = {
-            x:
-              parentNode.position.x +
-              (i - Math.floor(similarRecords[object.id].length / 2)) * 50,
-            y: parentNode.position.y - 50,
-          };
-
-          // ✅ Attach similar object node immediately
-          const childNode = new Node(
-            childPosition,
-            { x: 0, y: 0 },
-            similarObject.text_for_embedding,
-            similarObject.Image,
-            parentNode
-          );
-          parentNode.childNodes.push(childNode); // Store child under the correct parent
-          nodesRef.current.push(childNode);
-
-          setLinks((prevLinks) => [
-            ...prevLinks,
-            { source: parentNode, target: childNode },
-          ]);
-        });
-      }
-    });
+    // Return newly created nodes for smooth transition handling
+    return newlyCreatedNodes;
   };
+
 
   // Hook to ensure tree updates dynamically when history changes
   useEffect(() => {
-    updateTreeFromHistory(searchHistory, similarRecords);
-  }, [searchHistory, similarRecords]);
+    const previousNodeCount = nodesRef.current.length;
+    const newlyCreatedNodes = updateTreeFromHistory(searchHistory, similarRecords, activeNode);
+    const currentNodeCount = nodesRef.current.length;
+    
+    // Check if tree depth has increased and handle view transitions
+    const currentMaxDepth = calculateMaxDepth(nodesRef.current);
+    const isFirstNode = currentNodeCount === 1 && previousNodeCount === 0;
+    const hasNewNodes = newlyCreatedNodes && newlyCreatedNodes.length > 0;
+    
+    debug.log('TreeGraph useEffect:', {
+      previousNodeCount,
+      currentNodeCount,
+      currentMaxDepth,
+      maxDepth,
+      isFirstNode,
+      hasNewNodes,
+      newlyCreatedNodesCount: newlyCreatedNodes?.length || 0
+    });
+    
+    if (isFirstNode) {
+      // First node created - use auto-zoom to set up initial view
+      setMaxDepth(currentMaxDepth);
+      debug.log('First node created, calling autoZoomForDepth with depth:', currentMaxDepth);
+      //autoZoomForDepth(currentMaxDepth);
+    } else if (hasNewNodes) {
+      // New nodes created - use smooth transition to center of all newly created nodes
+      setMaxDepth(currentMaxDepth);
+      debug.log('New nodes created, calling smoothMoveToNode for center of:', newlyCreatedNodes.length, 'nodes');
+      //smoothMoveToNode(newlyCreatedNodes, 100); // 100ms delay as requested
+    }
+  }, [searchHistory, similarRecords, activeNode]); // Removed maxDepth to prevent infinite loops
+
 
   // Update container size dynamically
   useEffect(() => {
@@ -211,7 +493,7 @@ export const TreeGraph = ({
           .scale(1);
         
         svg.transition()
-          .duration(750)
+          .duration(TREE_CONFIG.TRANSITION_DURATION)
           .call(zoomRef.current.transform, resetTransform);
       } else {
         // No nodes yet, just center the view
@@ -220,11 +502,12 @@ export const TreeGraph = ({
           .scale(1);
         
         svg.transition()
-          .duration(750)
+          .duration(TREE_CONFIG.TRANSITION_DURATION)
           .call(zoomRef.current.transform, resetTransform);
       }
     }
   };
+
 
   useEffect(() => {
     const svg = d3
@@ -256,46 +539,23 @@ export const TreeGraph = ({
       .translate(containerSize.width / 2, containerSize.height / 2)
       .scale(1);
     
+    
     svg.call(zoom.transform, initialTransform);
     setTransform({ x: initialTransform.x, y: initialTransform.y, k: initialTransform.k });
+    
 
-    const addChildNodes = (node) => {
-      const newNodes = nodesRef.current;
-      const newLinks = links;
-      const childDistance = 200;
-      const spread = 300;
-
-      for (let i = 0; i < 3; i++) {
-        const childNode = new Node(
-          {
-            x: node.position.x + (i - 1) * spread,
-            y: node.position.y - childDistance,
-          },
-          { x: Math.random() * 2 - 1, y: -Math.abs(Math.random() * 2 - 1) },
-          `Child Node ${newNodes.length + 1}`,
-          null,
-          node
-        );
-        childNode.parentNode = node;
-        node.childNodes.push(childNode);
-        newNodes.push(childNode);
-        newLinks.push({ source: node, target: childNode });
-      }
-
-      setLinks([...newLinks]);
-    };
 
     const animate = () => {
       // Only animate if we have nodes
       if (nodesRef.current.length > 0) {
         // Generate a smooth wind force
         windForceRef.current = [
-          Math.sin(Date.now() / 5000) * 0.00065 +
+          Math.sin(Date.now() / 5000) * TREE_CONFIG.WIND_FORCE_MULTIPLIER +
             Math.sin(Date.now() / 10000 + 213) * 0.00005 +
             Math.sin(Date.now() / 500 + 0.42) * 0.0006 +
             Math.sin(Date.now() / 5 + 0.1) * 0.00005 +
             Math.sin(Date.now() / 5 + 0.16) * 0.00002,
-          0.12,
+          TREE_CONFIG.WIND_FORCE_BASE,
         ]; // Smooth oscillating force
         updatePhysics(nodesRef.current, links, windForceRef.current);
       }
@@ -310,6 +570,69 @@ export const TreeGraph = ({
         .attr("y2", (d) => d.target.position.y)
         .attr("stroke", "white")
         .attr("stroke-width", 2);
+
+      // Render similarity score labels
+      g.selectAll("text.similarity-label")
+        .data(links)
+        .join("text")
+        .attr("class", "similarity-label")
+        .attr("x", (d) => {
+          const midX = (d.source.position.x + d.target.position.x) / 2;
+          const midY = (d.source.position.y + d.target.position.y) / 2;
+          // Offset the text slightly to avoid overlapping with the line
+          const dx = d.target.position.x - d.source.position.x;
+          const dy = d.target.position.y - d.source.position.y;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          if (length > 0) {
+            const offsetX = (-dy / length) * 15; // Perpendicular offset
+            return midX + offsetX;
+          }
+          return midX;
+        })
+        .attr("y", (d) => {
+          const midX = (d.source.position.x + d.target.position.x) / 2;
+          const midY = (d.source.position.y + d.target.position.y) / 2;
+          // Offset the text slightly to avoid overlapping with the line
+          const dx = d.target.position.x - d.source.position.x;
+          const dy = d.target.position.y - d.source.position.y;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          if (length > 0) {
+            const offsetY = (dx / length) * 15; // Perpendicular offset
+            return midY + offsetY;
+          }
+          return midY;
+        })
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "middle")
+        .attr("fill", "#61dafb")
+        .attr("font-size", "11px")
+        .attr("font-weight", "bold")
+        .attr("pointer-events", "none")
+        .attr("stroke", "rgba(0, 0, 0, 0.8)")
+        .attr("stroke-width", "0.5px")
+        .attr("paint-order", "stroke fill")
+        .attr("transform", (d) => {
+          const dx = d.target.position.x - d.source.position.x;
+          const dy = d.target.position.y - d.source.position.y;
+          const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+          // Adjust angle for better readability - avoid upside-down text
+          const adjustedAngle = angle > 90 ? angle - 180 : angle < -90 ? angle + 180 : angle;
+          
+          // Calculate the text position for rotation center
+          const midX = (d.source.position.x + d.target.position.x) / 2;
+          const midY = (d.source.position.y + d.target.position.y) / 2;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          const offsetX = length > 0 ? (-dy / length) * 15 : 0;
+          const offsetY = length > 0 ? (dx / length) * 15 : 0;
+          const textX = midX + offsetX;
+          const textY = midY + offsetY;
+          
+          return `rotate(${adjustedAngle}, ${textX}, ${textY})`;
+        })
+        .text((d) => {
+          const score = d.similarityScore ? d.similarityScore.toFixed(2) : "N/A";
+          return score;
+        });
 
       // Render nodes
       g.selectAll("g.node-group")
@@ -327,7 +650,7 @@ export const TreeGraph = ({
             .attr("cx", (d) => d.position.x)
             .attr("cy", (d) => d.position.y)
             .attr("r", (d) => {
-              return d.extends;
+              return d.extends || TREE_CONFIG.NODE_RADIUS;
             })
             .attr("fill", "white")
             .attr("stroke", "gray")
@@ -358,6 +681,36 @@ export const TreeGraph = ({
     return () => svg.selectAll("*").remove();
   }, [links, containerSize]);
 
+  // Expose methods for testing
+  useImperativeHandle(ref, () => ({
+    getNodeCount: () => nodesRef.current.length,
+    getMaxDepth: () => calculateMaxDepth(nodesRef.current),
+    getRootNode: () => rootNodeRef.current,
+    triggerAutoZoom: (depth) => autoZoomForDepth(depth),
+    smoothMoveToNode: (node, delay) => smoothMoveToNode(node, delay),
+    resetView: () => resetView(),
+    getTransform: () => transform,
+    getContainerSize: () => containerSize
+  }), [transform, containerSize]);
+
+  // Validate props after all hooks
+  const propErrors = validateProps({ searchHistory, similarRecords, onNodeSelect, activeNode });
+  if (propErrors.length > 0) {
+    console.error('TreeGraph prop validation failed:', propErrors);
+    return <div>Error: Invalid props provided to TreeGraph</div>;
+  }
+
+  // Error boundary
+  if (hasError) {
+    return (
+      <div className="tree-error">
+        <h3>Tree Graph Error</h3>
+        <p>{errorMessage}</p>
+        <button onClick={() => setHasError(false)}>Retry</button>
+      </div>
+    );
+  }
+
   return (
     <div ref={containerRef} className="tree-container">
       <div className="tree-controls">
@@ -375,6 +728,8 @@ export const TreeGraph = ({
       <svg ref={svgRef} />
     </div>
   );
-};
+});
+
+TreeGraph.displayName = 'TreeGraph';
 
 export default TreeGraph;

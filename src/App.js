@@ -20,6 +20,7 @@ function App() {
   const [similarObjects, setSimilarObjects] = useState([]);
   const [searchHistory, setHistory] = useState([]); // Stores the search history
   const [similarRecords, setSimilarRecords] = useState({}); // Stores similar objects per search
+  const [searchedNodes, setSearchedNodes] = useState(new Set()); // Tracks which node IDs have been searched
 
   const [searchTerm, setSearchTerm] = useState("");
   const [typedText, setTypedText] = useState("");
@@ -72,6 +73,17 @@ function App() {
       setHistory((prevHistory) => [...prevHistory, dataArray]);
       console.log("Current history state:", searchHistory);
       setError(null);
+      
+      // Set the active node for the initial search
+      const nodeObject = {
+        description: dataArray.text_for_embedding,
+        image: dataArray.Image
+      };
+      setActiveNode(nodeObject);
+      
+      // Mark this node as searched
+      setSearchedNodes(prev => new Set([...prev, dataArray.id]));
+      
       // Fetch similar objects for the newly selected object
       fetchSimilarObjects(dataArray);
     } catch (err) {
@@ -115,9 +127,20 @@ function App() {
 
   // Handle clicking on a similar object
   const handleSimilarObjectClick = (selectedObject) => {
+    // Add the selected object to history
     setHistory((prevHistory) => [...prevHistory, selectedObject]);
     setObject(selectedObject);
-    setActiveNode(selectedObject);
+    
+    // Create a node object for the active node
+    const nodeObject = {
+      description: selectedObject.text_for_embedding,
+      image: selectedObject.Image
+    };
+    setActiveNode(nodeObject);
+    
+    // Mark this node as searched
+    setSearchedNodes(prev => new Set([...prev, selectedObject.id]));
+    
     // Clear similar objects before fetching new ones
     setSimilarObjects([]);
     // Fetch similar objects for the newly selected object
@@ -126,21 +149,46 @@ function App() {
 
   // Handle clicking on old node
   const handleNodeSelect = (node) => {
-    // Check if the node already exists in history
-    const existingHistoryItem = searchHistory.find(
-      (item) => item.text_for_embedding === node.description
-    );
-
-    if (existingHistoryItem) {
-      // ✅ Restore previous state (same layout, previously fetched similar objects)
-      setObject(existingHistoryItem);
-      setSimilarObjects(similarRecords[existingHistoryItem.id] || []);
-      setActiveNode(node);
+    // Check if this node has an ID (from database) or if we need to find it
+    let nodeId = node.id;
+    
+    // If node doesn't have an ID, try to find it in search history
+    if (!nodeId) {
+      const existingHistoryItem = searchHistory.find(
+        (item) => item.text_for_embedding === node.description
+      );
+      nodeId = existingHistoryItem?.id;
+    }
+    
+    // Check if this node ID has already been searched
+    if (nodeId && searchedNodes.has(nodeId)) {
+      // ✅ Node was previously searched: Find the original object and restore state
+      const existingHistoryItem = searchHistory.find(
+        (item) => item.id === nodeId
+      );
+      
+      if (existingHistoryItem) {
+        setObject(existingHistoryItem);
+        setSimilarObjects(similarRecords[existingHistoryItem.id] || []);
+        setActiveNode(node);
+      }
     } else {
-      // ✅ New node: Fetch fresh data & update layout
-      fetchSimilarObjects(node.description);
-      setObject({ text_for_embedding: node.description, Image: node.image });
+      // ✅ New node: Create object from node data and fetch similar objects
+      const nodeObject = {
+        id: nodeId || `node_${Date.now()}`, // Use existing ID or generate temporary one
+        text_for_embedding: node.description,
+        Image: node.image
+      };
+      
+      setObject(nodeObject);
       setActiveNode(node);
+      
+      // Add the node object to search history so TreeGraph can find it
+      setHistory((prevHistory) => [...prevHistory, nodeObject]);
+      
+      // Mark this node as searched and fetch similar objects
+      setSearchedNodes(prev => new Set([...prev, nodeObject.id]));
+      fetchSimilarObjects(nodeObject);
     }
   };
 
@@ -178,6 +226,7 @@ function App() {
       setActiveNode(null);
       setSearchTerm("");
       setSimilarRecords({});
+      setSearchedNodes(new Set());
     };
   }, [navigate]);
   useEffect(() => {
@@ -239,6 +288,7 @@ function App() {
                   <div className="object-card">
                     <div className="image-card">
                       <p>
+                        Currently Selected Node.<br />
                         <strong>ID:</strong> {object.id}
                       </p>
                       <img src={object.Image} alt={object.text_for_embedding} />
@@ -283,6 +333,9 @@ function App() {
                       justifyContent: "center",
                     }}
                   >
+                    <hr style={{ width: '100%', border: '1px solid #333', margin: '20px 0' }} />
+                    <p>Related Nodes</p>
+                    <hr style={{ width: '100%', border: '1px solid #333', margin: '20px 0' }} />
                     {similarObjects.map((simObj) => (
                       <div
                         key={simObj.id}

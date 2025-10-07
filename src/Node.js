@@ -5,7 +5,8 @@ export class Node {
     velocity,
     description = "",
     image = null,
-    parent = null
+    parent = null,
+    id = null
   ) {
     this.position = position;
     this.velocity = velocity;
@@ -15,8 +16,9 @@ export class Node {
     this.userSelected = false;
     this.description = description;
     this.image = image;
+    this.id = id; // Store the database ID for caching purposes
+    this.instanceId = `${id || 'temp'}_${Date.now()}_${Math.random()}`; // Unique instance ID
     this.depth = parent ? parent.depth + 1 : 0; // Calculate depth based on parent
-    this.resting = false; // Flag to indicate if node is at rest
-    this.initialRestingChecked = false; // Ensure initial resting values are set only once
+    this.resting = false; // Flag to indicate if node is at rest (calculated dynamically)
   }
 }
