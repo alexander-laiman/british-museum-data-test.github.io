@@ -23,9 +23,14 @@ function App() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [typedText, setTypedText] = useState("");
-  const fullText = "Seearch with a feeling...";
+  const fullText = "Search with a feeling...";
   const port = process.env.PORT || 10000;
-  const url = "https://british-museum-branching.onrender.com";
+    // Temporarily hardcode for testing
+    const url = "http://localhost:3000";
+  
+  // Debug: Log the API URL being used
+  console.log("API URL being used:", url);
+  console.log("REACT_APP_API_URL env var:", process.env.REACT_APP_API_URL);
   const [loggedIn, setLoggedIn] = useState(null);
   const [activeNode, setActiveNode] = useState(null);
   const navigate = useNavigate();
@@ -33,14 +38,17 @@ function App() {
   //Text typing effect for header:
   useEffect(() => {
     let index = 0;
+    setTypedText(""); // Reset text on mount
+    
     const typingInterval = setInterval(() => {
       if (index < fullText.length) {
-        setTypedText((prev) => prev + fullText.charAt(index));
+        setTypedText(fullText.substring(0, index + 1));
         index++;
       } else {
         clearInterval(typingInterval);
       }
     }, 60); // Typing speed
+    
     return () => clearInterval(typingInterval); // Cleanup interval
   }, []);
 

@@ -133,9 +133,10 @@ body {
   background-color: #1a1a1a;
   border-radius: 8px;
   padding: 20px;
-  margin: 20px 0;
-  width: 100%;
-  max-width: 600px;
+  margin: 0; /* Remove margin since gap is handled by parent */
+  flex: 1 1 40%; /* Allow growth and shrinking, but maintain at least 40% */
+  min-width: 250px; /* Minimum width to prevent unreadable content */
+  max-width: 500px; /* Reasonable maximum width */
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: row;
@@ -144,6 +145,7 @@ body {
   animation: fade-in 1.5s ease-in forwards;
   animation-delay: 0.2s;
   object-fit: contain;
+  align-self: flex-start; /* Align to top of container */
 }
 /* Object card adjustments */
 .object-card-2 {
@@ -291,7 +293,10 @@ body {
 .history-tree-main {
   display: flex;
   flex-direction: row;
-  max-height: 45vh; /* Prevents vertical overflow */
+  min-height: 20vh; /* Minimum height to ensure readability */
+  max-height: 60vh; /* Increased max height for better visibility */
+  width: 75%;
+  gap: 20px; /* Add spacing between tree and object card */
 }
 
 .tree-wrapper {
@@ -299,4 +304,36 @@ body {
   justify-content: center;
   align-items: center;
   animation: fade-in 1.5s;
+  flex: 1 1 50%; /* Allow growth and shrinking, but maintain at least 50% */
+  min-width: 300px; /* Minimum width to prevent unreadable content */
+  min-height: 350px; /* Minimum height for tree visibility */
+  max-width: 60%; /* Prevent tree from taking too much space */
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 768px) {
+  .history-tree-main {
+    flex-direction: column; /* Stack vertically on small screens */
+    min-height: auto;
+    max-height: none;
+  }
+  
+  .tree-wrapper {
+    flex: none;
+    min-width: 100%;
+    min-height: 300px;
+    max-width: 100%;
+  }
+  
+  .object-card {
+    flex: none;
+    min-width: 100%;
+    max-width: 100%;
+  }
+}
+
+/* Ensure main app container handles overflow properly */
+.main-app {
+  overflow-x: hidden; /* Prevent horizontal scroll */
+  min-height: 100vh;
 }

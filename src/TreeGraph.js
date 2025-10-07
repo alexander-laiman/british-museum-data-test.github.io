@@ -21,6 +21,8 @@ export const TreeGraph = ({
   const nodesRef = useRef([]);
   const maxNodes = 3;
   const windForceRef = useRef(0);
+  const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 }); // Pan and zoom state
+  const zoomRef = useRef(null); // Reference to the zoom behavior
 
   const updateTreeFromHistory = (searchHistory, similarRecords) => {
     if (!searchHistory.length) return;
@@ -30,14 +32,27 @@ export const TreeGraph = ({
       (node) => node.description === searchHistory[0].text_for_embedding
     );
     if (!rootNode) {
+      // Position root node at origin (0,0) - we'll center the view on it
       rootNode = new Node(
-        { x: containerSize.width / 2, y: containerSize.height - 50 },
+        { x: 0, y: 0 },
         { x: 0, y: 0 },
         searchHistory[0].text_for_embedding,
         searchHistory[0].Image,
         null // Root has no parent
       );
       nodesRef.current.push(rootNode);
+      
+      // Center the view on the root node when it's first created
+      if (svgRef.current && containerSize.width > 0 && zoomRef.current) {
+        const svg = d3.select(svgRef.current);
+        const centerTransform = d3.zoomIdentity
+          .translate(containerSize.width / 2, containerSize.height / 2)
+          .scale(1);
+        
+        svg.transition()
+          .duration(500)
+          .call(zoomRef.current.transform, centerTransform);
+      }
     }
 
     let parentNode = rootNode; // Start with root as the first parent
@@ -170,33 +185,7 @@ export const TreeGraph = ({
     return () => window.removeEventListener("resize", updateSize);
   }, []);
 
-  useEffect(() => {
-    const { width, height } = containerSize; // Get current div size
-
-    const rootNode = new Node({ x: width / 2, y: height - 50 }, { x: 0, y: 0 });
-    const initialNodes = [rootNode];
-    const initialLinks = [];
-
-    const childDistance = 300;
-    const spread = 400;
-    for (let i = 0; i < 3; i++) {
-      const childNode = new Node(
-        {
-          x: rootNode.position.x + (i - 1) * spread,
-          y: rootNode.position.y - childDistance,
-        },
-        { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1 },
-        `Child Node ${i + 1}`
-      );
-      childNode.parentNode = rootNode;
-      rootNode.childNodes.push(childNode);
-      initialNodes.push(childNode);
-      initialLinks.push({ source: rootNode, target: childNode });
-    }
-
-    nodesRef.current = initialNodes;
-    setLinks(initialLinks);
-  }, []);
+  // Remove the initial empty tree creation - we'll only show trees when there's real data
 
   // Handle node clicks
   const handleNodeClick = (_, node) => {
@@ -206,12 +195,69 @@ export const TreeGraph = ({
     onNodeSelect(node);
   };
 
+  // Reset view to center and default zoom
+  const resetView = () => {
+    if (svgRef.current && containerSize.width > 0 && zoomRef.current) {
+      const svg = d3.select(svgRef.current);
+      
+      // If we have nodes, center on the first node (root), otherwise center on view
+      if (nodesRef.current.length > 0) {
+        const rootNode = nodesRef.current[0];
+        const resetTransform = d3.zoomIdentity
+          .translate(
+            containerSize.width / 2 - rootNode.position.x,
+            containerSize.height / 2 - rootNode.position.y
+          )
+          .scale(1);
+        
+        svg.transition()
+          .duration(750)
+          .call(zoomRef.current.transform, resetTransform);
+      } else {
+        // No nodes yet, just center the view
+        const resetTransform = d3.zoomIdentity
+          .translate(containerSize.width / 2, containerSize.height / 2)
+          .scale(1);
+        
+        svg.transition()
+          .duration(750)
+          .call(zoomRef.current.transform, resetTransform);
+      }
+    }
+  };
+
   useEffect(() => {
     const svg = d3
       .select(svgRef.current)
       .attr("width", containerSize.width)
       .attr("height", containerSize.height)
       .style("background-color", "black");
+
+    // Create a group for all tree elements that can be transformed
+    const g = svg.append("g");
+
+    // Set up zoom behavior
+    const zoom = d3.zoom()
+      .scaleExtent([0.1, 4]) // Limit zoom range
+      .on("zoom", (event) => {
+        const { transform } = event;
+        setTransform({ x: transform.x, y: transform.y, k: transform.k });
+        g.attr("transform", transform);
+      });
+
+    // Store zoom behavior in ref for access by reset function
+    zoomRef.current = zoom;
+
+    // Apply zoom behavior to the SVG
+    svg.call(zoom);
+
+    // Set initial view - will be centered when real tree data loads
+    const initialTransform = d3.zoomIdentity
+      .translate(containerSize.width / 2, containerSize.height / 2)
+      .scale(1);
+    
+    svg.call(zoom.transform, initialTransform);
+    setTransform({ x: initialTransform.x, y: initialTransform.y, k: initialTransform.k });
 
     const addChildNodes = (node) => {
       const newNodes = nodesRef.current;
@@ -240,27 +286,33 @@ export const TreeGraph = ({
     };
 
     const animate = () => {
-      // Generate a smooth wind force
-      windForceRef.current = [
-        Math.sin(Date.now() / 5000) * 0.00065 +
-          Math.sin(Date.now() / 10000 + 213) * 0.00005 +
-          Math.sin(Date.now() / 500 + 0.42) * 0.0006 +
-          Math.sin(Date.now() / 5 + 0.1) * 0.00005 +
-          Math.sin(Date.now() / 5 + 0.16) * 0.00002,
-        0.12,
-      ]; // Smooth oscillating force
-      updatePhysics(nodesRef.current, links, windForceRef.current);
-      svg
-        .selectAll("line")
+      // Only animate if we have nodes
+      if (nodesRef.current.length > 0) {
+        // Generate a smooth wind force
+        windForceRef.current = [
+          Math.sin(Date.now() / 5000) * 0.00065 +
+            Math.sin(Date.now() / 10000 + 213) * 0.00005 +
+            Math.sin(Date.now() / 500 + 0.42) * 0.0006 +
+            Math.sin(Date.now() / 5 + 0.1) * 0.00005 +
+            Math.sin(Date.now() / 5 + 0.16) * 0.00002,
+          0.12,
+        ]; // Smooth oscillating force
+        updatePhysics(nodesRef.current, links, windForceRef.current);
+      }
+      
+      // Render links
+      g.selectAll("line")
         .data(links)
         .join("line")
         .attr("x1", (d) => d.source.position.x)
         .attr("y1", (d) => d.source.position.y)
         .attr("x2", (d) => d.target.position.x)
         .attr("y2", (d) => d.target.position.y)
-        .attr("stroke", "white");
-      svg
-        .selectAll("g.node-group")
+        .attr("stroke", "white")
+        .attr("stroke-width", 2);
+
+      // Render nodes
+      g.selectAll("g.node-group")
         .data(nodesRef.current)
         .join("g")
         .attr("class", "node-group")
@@ -278,6 +330,9 @@ export const TreeGraph = ({
               return d.extends;
             })
             .attr("fill", "white")
+            .attr("stroke", "gray")
+            .attr("stroke-width", 1)
+            .style("cursor", "pointer")
             .on("click", handleNodeClick);
 
           // Render the image inside the circle
@@ -291,6 +346,7 @@ export const TreeGraph = ({
             .attr("height", (d) => d.extends * 2)
             .attr("xlink:href", (d) => d.image)
             .attr("clip-path", "circle()")
+            .style("cursor", "pointer")
             .on("click", handleNodeClick);
         });
 
@@ -304,6 +360,18 @@ export const TreeGraph = ({
 
   return (
     <div ref={containerRef} className="tree-container">
+      <div className="tree-controls">
+        <button 
+          className="reset-view-btn" 
+          onClick={resetView}
+          title="Reset view to center"
+        >
+          🎯 Reset View
+        </button>
+        <div className="zoom-info">
+          Zoom: {Math.round(transform.k * 100)}%
+        </div>
+      </div>
       <svg ref={svgRef} />
     </div>
   );
